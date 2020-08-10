@@ -5,4 +5,5 @@ go 1.14
 require (
 	github.com/getkin/kin-openapi v0.18.0
 	github.com/spf13/cobra v1.0.0
+	google.golang.org/api v0.30.0
 )

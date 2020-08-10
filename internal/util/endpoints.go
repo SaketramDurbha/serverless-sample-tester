@@ -15,8 +15,10 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"github.com/getkin/kin-openapi/openapi3"
+	"google.golang.org/api/idtoken"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -105,14 +107,17 @@ func validateEndpointOperation(endpointURL string, operation *openapi3.Operation
 // makeTestRequest returns a success bool based on whether the returned status code  was included in the provided
 // openapi3.Operation expected responses.
 func makeTestRequest(endpointURL, httpMethod, mimeType string, reqBodyReader *strings.Reader, operation *openapi3.Operation, identityToken string) (bool, error) {
-	client := &http.DefaultClient
+	ctx := context.Background()
+	client, err := idtoken.NewClient(ctx, endpointURL)
+	if err != nil {
+		return false, fmt.Errorf("[util.makeTestRequest] creating an http.Client: %w", err)
+	}
 
 	req, err := http.NewRequest(httpMethod, endpointURL, reqBodyReader)
 	if err != nil {
 		return false, fmt.Errorf("[util.makeTestRequest] creating an http.Request: %w", err)
 	}
 
-	req.Header.Add("Authorization", "Bearer "+identityToken)
 	req.Header.Add("content-type", mimeType)
 
 	resp, err := (*client).Do(req)
