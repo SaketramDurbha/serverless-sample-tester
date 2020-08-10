@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // test holds the openapi3.Operation and HTTP method associated with a single
@@ -32,10 +33,20 @@ type test struct {
 	httpMethod string
 }
 
+// requestTimeout is the time duration (in seconds) for HTTP requests made to Cloud Run services.
+const requestTimeout = 10
+
 // ValidateEndpoints tests all paths (represented by openapi3.Paths) with all HTTP methods and given response bodies
 // and make sure they respond with the expected status code. Returns a success bool based on whether all the tests
 // passed.
 func ValidateEndpoints(serviceURL string, paths *openapi3.Paths) (bool, error) {
+	ctx := context.Background()
+	httpClient, err := idtoken.NewClient(ctx, serviceURL)
+	if err != nil {
+		return false, fmt.Errorf("[util.ValidateEndpoints] creating an http.Client: %w", err)
+	}
+	httpClient.Timeout = time.Second * requestTimeout
+
 	success := true
 	for endpoint, pathItem := range *paths {
 		log.Printf("Testing %s endpoint\n", endpoint)
@@ -53,7 +64,7 @@ func ValidateEndpoints(serviceURL string, paths *openapi3.Paths) (bool, error) {
 
 		endpointURL := serviceURL + endpoint
 		for _, t := range tests {
-			s, err := validateEndpointOperation(endpointURL, t.operation, t.httpMethod)
+			s, err := validateEndpointOperation(httpClient, endpointURL, t.operation, t.httpMethod)
 			if err != nil {
 				return s, fmt.Errorf("[util.ValidateEndpoints] testing %s requests on %s: %w", t.httpMethod, endpointURL, err)
 			}
@@ -67,7 +78,7 @@ func ValidateEndpoints(serviceURL string, paths *openapi3.Paths) (bool, error) {
 
 // validateEndpointOperation validates a single endpoint and a single HTTP method, and ensures that the request --
 // including the provided sample request body -- elicits the expected status code.
-func validateEndpointOperation(endpointURL string, operation *openapi3.Operation, httpMethod string) (bool, error) {
+func validateEndpointOperation(client *http.Client, endpointURL string, operation *openapi3.Operation, httpMethod string) (bool, error) {
 	if operation == nil {
 		return true, nil
 	}
@@ -77,7 +88,7 @@ func validateEndpointOperation(endpointURL string, operation *openapi3.Operation
 		log.Println("Sending empty request body")
 		reqBodyReader := strings.NewReader("")
 
-		s, err := makeTestRequest(endpointURL, httpMethod, "", reqBodyReader, operation)
+		s, err := makeTestRequest(client, endpointURL, httpMethod, "", reqBodyReader, operation)
 		if err != nil {
 			return s, fmt.Errorf("[util.validateEndpointOperation] testing %s request on %s: %w", httpMethod, endpointURL, err)
 		}
@@ -93,7 +104,7 @@ func validateEndpointOperation(endpointURL string, operation *openapi3.Operation
 
 		reqBodyReader := strings.NewReader(reqBodyStr)
 
-		s, err := makeTestRequest(endpointURL, httpMethod, mimeType, reqBodyReader, operation)
+		s, err := makeTestRequest(client, endpointURL, httpMethod, mimeType, reqBodyReader, operation)
 		if err != nil {
 			return s, fmt.Errorf("[util.validateEndpointOperation] testing %s %s request on %s: %w", httpMethod, mimeType, endpointURL, err)
 		}
@@ -106,13 +117,7 @@ func validateEndpointOperation(endpointURL string, operation *openapi3.Operation
 
 // makeTestRequest returns a success bool based on whether the returned status code  was included in the provided
 // openapi3.Operation expected responses.
-func makeTestRequest(endpointURL, httpMethod, mimeType string, reqBodyReader *strings.Reader, operation *openapi3.Operation) (bool, error) {
-	ctx := context.Background()
-	client, err := idtoken.NewClient(ctx, endpointURL)
-	if err != nil {
-		return false, fmt.Errorf("[util.makeTestRequest] creating an http.Client: %w", err)
-	}
-
+func makeTestRequest(client *http.Client, endpointURL, httpMethod, mimeType string, reqBodyReader *strings.Reader, operation *openapi3.Operation) (bool, error) {
 	req, err := http.NewRequest(httpMethod, endpointURL, reqBodyReader)
 	if err != nil {
 		return false, fmt.Errorf("[util.makeTestRequest] creating an http.Request: %w", err)
