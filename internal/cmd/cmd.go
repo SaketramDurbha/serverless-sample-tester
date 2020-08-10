@@ -20,7 +20,6 @@ import (
 	"github.com/GoogleCloudPlatform/serverless-sample-tester/internal/util"
 	"github.com/spf13/cobra"
 	"log"
-	"os/exec"
 	"path/filepath"
 )
 
