@@ -49,16 +49,6 @@ func Root(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("[cmd.Root] building and deploying sample to Cloud Run: %w", err)
 	}
 
-	log.Println("Getting identity token for gcloud auhtorized account")
-	var identToken string
-
-	a := append(util.GcloudCommonFlags, "auth", "print-identity-token")
-	identToken, err = util.ExecCommand(exec.Command("gcloud", a...), s.Dir)
-
-	if err != nil {
-		return fmt.Errorf("[cmd.Root] getting identity token for gcloud auhtorized account: %w", err)
-	}
-
 	log.Println("Checking endpoints for expected results")
 	serviceURL, err := s.Service.URL(s.Dir)
 	if err != nil {
@@ -66,7 +56,7 @@ func Root(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Println("Validating Cloud Run service endpoints for expected status codes")
-	allTestsPassed, err := util.ValidateEndpoints(serviceURL, &swagger.Paths, identToken)
+	allTestsPassed, err := util.ValidateEndpoints(serviceURL, &swagger.Paths)
 	if err != nil {
 		return fmt.Errorf("[cmd.Root] validating Cloud Run service endpoints for expected status codes: %w", err)
 	}
